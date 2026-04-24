@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mensajes a las Estrellas</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(circle at bottom, #1b2735 0%, #090a0f 100%); font-family: 'Segoe UI', sans-serif; color: white; }
+        #cielo { display: block; }
+        #btn-escribir { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); padding: 12px 24px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 30px; color: white; font-size: 16px; cursor: pointer; backdrop-filter: blur(5px); transition: all 0.3s; z-index: 10; }
+        #btn-escribir:hover { background: rgba(255, 255, 255, 0.3); box-shadow: 0 0 15px rgba(255, 255, 255, 0.5); }
+        #modal-mensaje { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 15, 25, 0.9); padding: 30px; border-radius: 15px; border: 1px solid rgba(255, 255, 255, 0.2); text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8); z-index: 20; }
+        textarea { width: 300px; height: 100px; background: transparent; border: none; border-bottom: 1px solid white; color: white; font-size: 16px; resize: none; outline: none; margin-bottom: 20px; }
+        .btn-accion { padding: 8px 16px; margin: 0 5px; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; }
+        #btn-enviar { background: white; color: black; }
+        #btn-cancelar { background: transparent; color: white; border: 1px solid white; }
+        #tooltip { position: absolute; background: rgba(0, 0, 0, 0.8); color: white; padding: 10px 15px; border-radius: 8px; font-size: 14px; pointer-events: none; opacity: 0; transition: opacity 0.3s; max-width: 250px; word-wrap: break-word; border: 1px solid rgba(255,255,255,0.2); z-index: 15; }
+    </style>
+</head>
+<body>
+
+    <canvas id="cielo"></canvas>
+    <div id="tooltip"></div>
+    <button id="btn-escribir">Dejar ir un mensaje</button>
+
+    <div id="modal-mensaje">
+        <p>Escribe lo que nunca pudiste decir...</p>
+        <textarea id="texto-mensaje" placeholder="Tu mensaje se convertirá en luz..."></textarea><br>
+        <button id="btn-cancelar" class="btn-accion">Cancelar</button>
+        <button id="btn-enviar" class="btn-accion">Convertir en estrella</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+        // ¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡ MIS CLAVES EXACTAS DE FIREBASE ES MUY MUY MUY IMPORTANTE SUBNORMAL !!!!!!!!!!!!!
+        const firebaseConfig = {
+            apiKey: "AIzaSyB9OdBruJesfB6sNxO7WgqdDpC0gQZG0hA",
+            authDomain: "estrellas-30840.firebaseapp.com",
+            projectId: "estrellas-30840",
+            storageBucket: "estrellas-30840.firebasestorage.app",
+            messagingSenderId: "203303205103",
+            appId: "1:203303205103:web:5195684966d26edcaec31a"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const canvas = document.getElementById('cielo');
+        const ctx = canvas.getContext('2d');
+        let estrellas = [];
+
+        function ajustarCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', ajustarCanvas); //Apartado de Ajustar el Canvas jejeje
+        ajustarCanvas();
+
+        const modal = document.getElementById('modal-mensaje');
+        const btnEscribir = document.getElementById('btn-escribir');
+        const btnCancelar = document.getElementById('btn-cancelar');
+        const btnEnviar = document.getElementById('btn-enviar');
+        const textoMensaje = document.getElementById('texto-mensaje');
+        const tooltip = document.getElementById('tooltip');
+
+        btnEscribir.addEventListener('click', () => { modal.style.display = 'block'; textoMensaje.focus(); });
+        btnCancelar.addEventListener('click', () => { modal.style.display = 'none'; textoMensaje.value = ''; });
+
+        btnEnviar.addEventListener('click', async () => {
+            const mensaje = textoMensaje.value.trim();
+            if (mensaje !== "") {
+                btnEnviar.disabled = true; 
+                try {
+                    await addDoc(collection(db, "mensajes"), {
+                        texto: mensaje,
+                        xPorcentaje: Math.random(), 
+                        yPorcentaje: Math.random() * 0.8 
+                    });
+                    modal.style.display = 'none';
+                    textoMensaje.value = '';
+                } catch (e) {
+                    console.error("Error al añadir el mensaje: ", e);
+                    alert("Hubo un error de conexión.");
+                }
+                btnEnviar.disabled = false;
+            }
+        });
+
+        // ESCUCHAR LA BASE DE DATOS: Se borra automaticamente 
+        onSnapshot(collection(db, "mensajes"), (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+                // Si alguien añade una estrella
+                if (change.type === "added") {
+                    const datos = change.doc.data();
+                    estrellas.push({
+                        id: change.doc.id, // guardamos la etiqueta secreta de la estrella
+                        xPorcentaje: datos.xPorcentaje,
+                        yPorcentaje: datos.yPorcentaje,
+                        mensaje: datos.texto,
+                        radio: Math.random() * 1.5 + 0.5,
+                        opacidad: Math.random(),
+                        cambioOpacidad: 0.02 * (Math.random() > 0.5 ? 1 : -1)
+                    });
+                }
+                // Si yo llego a borrar el mensaje de FireBase el mensaje de la pagina web desaparece por completo a tiempo real 
+                if (change.type === "removed") {
+                    estrellas = estrellas.filter(estrella => estrella.id !== change.doc.id);
+                }
+            });
+        });
+
+        function animarCielo() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            estrellas.forEach(estrella => {
+                estrella.opacidad += estrella.cambioOpacidad;
+                if (estrella.opacidad <= 0.2 || estrella.opacidad >= 1) {
+                    estrella.cambioOpacidad *= -1;
+                }
+
+                const posX = estrella.xPorcentaje * canvas.width;
+                const posY = estrella.yPorcentaje * canvas.height;
+
+                ctx.beginPath();
+                ctx.arc(posX, posY, estrella.radio, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${estrella.opacidad})`;
+                ctx.fill();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = "white";
+            });
+
+            requestAnimationFrame(animarCielo);
+        }
+        animarCielo();
+
+        // Soporte para raton y teclado en (PC) y Soporte Tactil para (Moviles)
+        function comprobarInteraccion(eventoX, eventoY) {
+            let estrellaEncontrada = false;
+            for (let i = 0; i < estrellas.length; i++) {
+                const estrella = estrellas[i];
+                const posX = estrella.xPorcentaje * canvas.width;
+                const posY = estrella.yPorcentaje * canvas.height;
+                const distancia = Math.sqrt((eventoX - posX) ** 2 + (eventoY - posY) ** 2);
+                
+                if (distancia < 15) { // Área un poco más grande para el dedo en móviles tengo que parchear algo mejor luego, First Try out para ver como va la cosa
+                    tooltip.innerHTML = estrella.mensaje;
+                    tooltip.style.left = (eventoX + 15) + 'px';
+                    tooltip.style.top = (eventoY + 15) + 'px';
+                    tooltip.style.opacity = 1;
+                    estrellaEncontrada = true; //recuerda que siempre tiene que ir True ; ya que sino da error fatal 404
+                    canvas.style.cursor = 'pointer';
+                    break;
+                }
+            }
+            if (!estrellaEncontrada) {
+                tooltip.style.opacity = 0;
+                canvas.style.cursor = 'default';
+            }
+        }
+
+        canvas.addEventListener('mousemove', (e) => comprobarInteraccion(e.clientX, e.clientY));
+        // Añadimos el toque para móviles
+        canvas.addEventListener('touchstart', (e) => {
+            const toque = e.touches[0];
+            comprobarInteraccion(toque.clientX, toque.clientY); //Estructura X Y en el plano (ClienteY e ClienteX)
+        });
+    </script>
+</body>
+</html>
